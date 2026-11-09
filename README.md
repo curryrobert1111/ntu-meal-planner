@@ -47,8 +47,8 @@ ntu-meal-planner/
 
 1. 註冊 GitHub 帳號，把**帳號名稱**告訴管理者（curryrobert1111），等他邀請你。
 2. 收到邀請後，從 email 或 <https://github.com/notifications> 按 **Accept invitation**。接受後才能 push。
-3. 安裝 Git：<https://git-scm.com/downloads>（Windows 一路按「下一步」即可）。
-4. 打開終端機（Windows 用「Git Bash」），設定你的名字與 email（會顯示在每次修改紀錄上）：
+3. 安裝 Git（下載與安裝步驟見下方「安裝 Git」）。
+4. 打開終端機（Windows 用「Git Bash」，操作方式見下方「Git Bash 基本操作」），設定你的名字與 email（會顯示在每次修改紀錄上）：
 
 ```
 git config --global user.name "你的名字"
@@ -56,6 +56,70 @@ git config --global user.email "你的 GitHub email"
 ```
 
 > 不想打指令也可以用 [GitHub Desktop](https://desktop.github.com/)，步驟對照見本節最後。
+
+### 安裝 Git
+
+**Windows**
+
+1. 到 <https://git-scm.com/downloads/win>，點 **Click here to download**（會下載 `Git-x.xx.x-64-bit.exe`）。
+2. 執行下載的檔案，大部分畫面直接按 **Next** 用預設值即可，只有兩個地方建議改：
+   - **Choosing the default editor used by Git**：預設是 Vim（新手很難操作），改選 **Use Notepad as Git's default editor**（記事本），有裝 VS Code 的話選 **Use Visual Studio Code**。
+   - **Adjusting the name of the initial branch in new repositories**：選 **Override the default branch name**，填 `main`（和本專案一致）。
+   - 其他像 PATH、HTTPS、換行符號、Git Credential Manager 都維持預設，最後按 **Install**。
+3. 裝好後，從開始選單打開 **Git Bash**，輸入下面指令，看到 `git version 2.xx...` 就成功了：
+
+```
+git --version
+```
+
+> 會用指令的話，也可以在 PowerShell 輸入 `winget install --id Git.Git -e` 一行安裝。
+
+**macOS**
+
+打開「終端機」輸入 `git --version`。如果還沒安裝，系統會跳出視窗問要不要安裝「命令列開發者工具」，按 **安裝** 即可（或 `xcode-select --install`）。有裝 Homebrew 的話也可以用 `brew install git`。
+
+**已經安裝過？** 一樣用 `git --version` 確認；版本太舊（2.30 以前）建議重新下載安裝新版覆蓋。
+
+### Git Bash 基本操作（Windows）
+
+Git Bash 是安裝 Git 時一起裝好的終端機，上面所有 `git` 指令都在這裡輸入。
+
+**打開 Git Bash 並進到專案資料夾**
+
+- 最簡單：在檔案總管打開 `ntu-meal-planner` 資料夾，在空白處按右鍵 →（Windows 11 先點「顯示其他選項」）→ **Open Git Bash here**，開啟後就已經在專案資料夾裡。
+- 或從開始選單打開 Git Bash，再用 `cd` 切過去。Windows 的 `C:\Users\你\Desktop` 在 Git Bash 裡寫成 `/c/Users/你/Desktop`，路徑有空格或中文時要加引號：
+
+```
+cd "/c/Users/你的使用者名稱/OneDrive/桌面/ntu-meal-planner"
+```
+
+> 也可以輸入 `cd ` 後，把資料夾從檔案總管直接拖進 Git Bash 視窗，路徑會自動填好。
+
+**常用指令**
+
+| 指令 | 作用 |
+|---|---|
+| `pwd` | 顯示現在在哪個資料夾 |
+| `ls` | 列出目前資料夾的檔案（`ls -a` 連隱藏檔一起列） |
+| `cd 資料夾名` | 進入資料夾；`cd ..` 回上一層；`cd ~` 回家目錄 |
+| `explorer .` | 用檔案總管打開目前資料夾 |
+| `start index.html` | 用預設瀏覽器打開網頁預覽 |
+| `code .` | 用 VS Code 打開整個專案（有裝 VS Code 才能用） |
+| `clear` | 清空畫面 |
+| `git log --oneline` | 看修改紀錄（一行一筆） |
+
+**操作小技巧**
+
+- **Tab 鍵自動補完**：打檔名或資料夾名的前幾個字按 Tab，會自動補完。
+- **↑ / ↓ 方向鍵**：叫出之前輸入過的指令，不用重打。
+- **複製／貼上**：Git Bash 裡的 Ctrl+C 是「中斷執行」不是複製。複製用滑鼠選取（選取即複製）或 Ctrl+Insert，貼上用 **Shift+Insert** 或按右鍵 → Paste。
+- **畫面停住、底下出現 `:` 或 `(END)`**（例如 `git log` 時）：按 `q` 離開。
+- **跳進 vim 編輯器**（例如 `git pull` 要你寫合併訊息、畫面上方有說明文字、左邊一排 `~`）：
+  - 用預設訊息就好：輸入 `:wq` 再按 Enter（存檔離開）。
+  - 想放棄：按 Esc，輸入 `:q!` 再按 Enter。
+  - 不想再遇到 vim，可以改成用記事本：`git config --global core.editor notepad`
+- **中文檔名在 `git status` 顯示成 `\346\241\214...`**：執行一次 `git config --global core.quotepath false` 就會正常顯示中文。
+- 指令跑很久或卡住：按 **Ctrl+C** 中斷。
 
 ### 1. 把專案下載到電腦（clone，只做一次）
 
