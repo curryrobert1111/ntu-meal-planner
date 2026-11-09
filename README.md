@@ -34,90 +34,126 @@ ntu-meal-planner/
 
 也可以在網頁的「餐點資料」分頁修改／新增，再按「匯出 JSON」把結果貼回 `data.js`。
 
----
-
-## 一、用 GitHub Pages 上架網頁（免費）
-
-1. 註冊／登入 <https://github.com>。
-2. 右上角「＋」→ **New repository**，名稱填 `ntu-meal-planner`，選 **Public**，按 **Create repository**。
-3. 在新 repo 頁面點 **uploading an existing file**，把整個資料夾的內容（`index.html`、`css/`、`js/`、`linebot/`、`README.md`、`.gitignore`）拖進去，按 **Commit changes**。
-   - 不要上傳 `linebot/node_modules/` 和 `.env`。
-   - 會用 git 的話：
-     ```bash
-     cd ntu-meal-planner
-     git init && git add . && git commit -m "first version"
-     git branch -M main
-     git remote add origin https://github.com/你的帳號/ntu-meal-planner.git
-     git push -u origin main
-     ```
-4. repo 的 **Settings → Pages**：
-   - Source 選 **Deploy from a branch**
-   - Branch 選 **main**、資料夾 **/(root)**，按 **Save**。
-5. 等 1–2 分鐘，網址會出現在同一頁：`https://你的帳號.github.io/ntu-meal-planner/`
-6. 之後修改檔案、commit，網站會在一兩分鐘內自動更新。
-
-> 注意：網頁上的修改只存在使用者自己的瀏覽器（localStorage）。要讓所有人看到新資料，必須改 `js/data.js` 再推上 GitHub。
+注意：網頁上的修改只存在使用者自己的瀏覽器（localStorage）。要讓所有人看到新資料，必須改 `js/data.js` 再 push 上 GitHub（流程見下一節）。
 
 ---
 
-## 二、LINE 上架
+## 一起開發：用 Git 與 GitHub 協作
 
-有兩種做法，可以只做 A，也可以 A＋B 一起做。
+- 程式碼：<https://github.com/curryrobert1111/ntu-meal-planner>
+- 網站：<https://curryrobert1111.github.io/ntu-meal-planner/>（push 到 `main` 後 1–2 分鐘自動更新）
 
-### A. 不寫程式：官方帳號＋圖文選單連到網頁
+### 0. 事前準備（只做一次）
 
-1. 到 **LINE Official Account Manager**（<https://manager.line.biz>）用 LINE 帳號登入，建立一個官方帳號（一般帳號免費）。
-2. 左側 **聊天室相關 → 圖文選單** → 建立，版型選一格或兩格：
-   - 動作類型選 **連結**，填上 GitHub Pages 網址。
-   - 可再加一格「文字」動作，例如傳送「菜單」（給 B 的 Bot 用）。
-3. 設定顯示期間、儲存並啟用。
-4. **主頁 → 加入好友工具** 可以拿到 QR code 與加好友連結，貼到課程或社群即可。
+1. 註冊 GitHub 帳號，把**帳號名稱**告訴管理者（curryrobert1111），等他邀請你。
+2. 收到邀請後，從 email 或 <https://github.com/notifications> 按 **Accept invitation**。接受後才能 push。
+3. 安裝 Git：<https://git-scm.com/downloads>（Windows 一路按「下一步」即可）。
+4. 打開終端機（Windows 用「Git Bash」），設定你的名字與 email（會顯示在每次修改紀錄上）：
 
-### B. 寫程式：Messaging API 聊天機器人（`linebot/`）
-
-使用者在聊天室傳「菜單」「預算 1500」「全素」「不吃 牛肉」「60元」等，Bot 直接回覆一週菜單或餐點清單。
-
-**1. 開啟 Messaging API**
-
-1. 在 LINE Official Account Manager 進入剛才的官方帳號 → 右上 **設定 → Messaging API → 啟用 Messaging API**，選擇或建立一個 Provider。
-   （LINE 目前要求先有官方帳號，再從這裡啟用；無法直接在 Developers Console 新建 Messaging API channel。）
-2. 到 **LINE Developers Console**（<https://developers.line.biz/console/>）找到該 channel：
-   - **Basic settings** → 複製 **Channel secret**
-   - **Messaging API** → **Channel access token (long-lived)** 按 **Issue** → 複製
-3. 回到 Official Account Manager → **設定 → 回應設定**：開啟 **Webhook**，關閉「自動回應訊息」（否則會跟 Bot 一起回）。
-
-**2. 本機測試**
-
-```bash
-cd linebot
-cp .env.example .env      # 填入 Channel secret 與 access token
-npm install
-npm start                 # 伺服器在 http://localhost:3000
+```
+git config --global user.name "你的名字"
+git config --global user.email "你的 GitHub email"
 ```
 
-LINE 需要公開的 HTTPS 網址，本機測試可用 ngrok：`ngrok http 3000`，把得到的 `https://xxxx.ngrok-free.app/webhook` 填到下一步的 Webhook URL。
+> 不想打指令也可以用 [GitHub Desktop](https://desktop.github.com/)，步驟對照見本節最後。
 
-**3. 部署到雲端（以 Render 為例，免費方案即可）**
+### 1. 把專案下載到電腦（clone，只做一次）
 
-1. 到 <https://render.com> 用 GitHub 登入 → **New → Web Service** → 選 `ntu-meal-planner` repo。
-2. 設定：
-   - **Root Directory**：留空（Bot 需要讀到上一層的 `js/`）
-   - **Build Command**：`cd linebot && npm install`
-   - **Start Command**：`node linebot/index.js`
-   - **Environment**：新增 `LINE_CHANNEL_SECRET`、`LINE_CHANNEL_ACCESS_TOKEN`、`WEB_URL`（GitHub Pages 網址）
-3. 部署完成後會得到 `https://xxx.onrender.com`。
-4. 回到 LINE Developers → **Messaging API → Webhook settings**：
-   - Webhook URL 填 `https://xxx.onrender.com/webhook` → **Update** → **Verify**（顯示 Success 即成功）
-   - 開啟 **Use webhook**
-5. 用手機掃 **Messaging API** 頁面上的 QR code 加好友，傳「說明」測試。
+```
+git clone https://github.com/curryrobert1111/ntu-meal-planner.git
+cd ntu-meal-planner
+```
 
-> Render 免費方案閒置約 15 分鐘會休眠，第一則訊息可能要等數十秒才喚醒；若常遇到沒回應，可改用付費方案或 Google Cloud Run、Fly.io 等。
-> 使用者設定（預算、忌口）目前存在記憶體，重新部署後會清空；需要長期保存可接 Firestore 或 Redis。
+第一次 push 時會跳出 GitHub 登入視窗，用瀏覽器登入授權即可。**不要在終端機輸入 GitHub 密碼**（GitHub 已不接受密碼登入）。
 
-**4. 推廣**
+### 2. 每次修改的流程
 
-- Official Account Manager → **加入好友工具** 取得 QR code。
-- 圖文選單可放「排菜單」「60 元」「設定」等按鈕（動作選「文字」）。
+```
+git pull                         # ① 先抓別人最新的修改（每次動手前都要做）
+# ② 修改檔案，用瀏覽器打開 index.html 確認沒壞
+git status                       # ③ 看改了哪些檔案
+git add .                        # ④ 把修改加入這次的提交
+git commit -m "更新公館豆花價格"   # ⑤ 寫一句話說明改了什麼
+git push                         # ⑥ 上傳到 GitHub，網站一兩分鐘後更新
+```
+
+網站沒變的話，等一下再按 Ctrl+F5 重新整理；repo 的 **Actions** 分頁可以看部署進度（綠勾代表完成）。
+
+### 3. push 被拒絕怎麼辦
+
+看到 `! [rejected] main -> main (fetch first)` 代表別人在你之後先 push 了。先把他的修改抓下來再 push：
+
+```
+git pull
+git push
+```
+
+`git pull` 時如果跳出編輯器要你寫合併訊息，直接存檔關閉即可（vim：輸入 `:wq` 後按 Enter）。
+
+### 4. 遇到衝突（conflict）
+
+兩個人改到同一個檔案的同一段時，`git pull` 會顯示 `CONFLICT`。打開那個檔案會看到：
+
+```
+<<<<<<< HEAD
+    { id: "x1", store: "某店", item: "排骨飯", price: 100, ... },   ← 你的版本
+=======
+    { id: "x1", store: "某店", item: "排骨飯", price: 105, ... },   ← 別人的版本
+>>>>>>> origin/main
+```
+
+1. 決定要留哪一行（或合併兩者），把 `<<<<<<<`、`=======`、`>>>>>>>` 三行標記刪掉。
+2. 存檔後：
+
+```
+git add .
+git commit -m "合併衝突"
+git push
+```
+
+搞不清楚的話可以先 `git merge --abort` 回到 pull 之前的狀態，再找人一起看。
+
+### 5. 協作守則
+
+- **動手前先 `git pull`，改完盡快 `push`**，越久沒同步越容易衝突。
+- 一次 commit 只做一件事，訊息寫清楚（例：「新增 118 巷某某麵店 12 項」「修正女九自助餐價格」）。
+- 要大改 `js/data.js` 前先在群組說一聲，避免兩人同時改同一家店。
+- 不要上傳 `.env`（LINE 金鑰）和 `node_modules/`，`.gitignore` 已經排除了。
+- push 前用瀏覽器打開 `index.html` 試一下，網站壞了大家都會看到。
+
+### 6. 進階：用分支＋Pull Request（大改功能時建議）
+
+想先給別人看過再上線，就不要直接改 `main`：
+
+```
+git switch -c add-new-stores       # 開一個新分支
+# 修改、git add、git commit
+git push -u origin add-new-stores
+```
+
+接著到 GitHub repo 頁面按 **Compare & pull request** → 寫說明 → **Create pull request**。
+其他人可以在 PR 上留言；確認沒問題後按 **Merge pull request** 才會上線。合併後回到 main：
+
+```
+git switch main
+git pull
+```
+
+### 7. 管理者：邀請協作者
+
+repo 的 **Settings → Collaborators → Add people**，輸入對方的 GitHub 帳號或 email。
+邀請 7 天內沒接受會失效，到同一頁重新邀請即可。
+沒有被邀請的人也能參與：在 repo 按 **Fork** 複製一份到自己帳號，改完送 Pull Request，由管理者決定是否合併。
+
+### GitHub Desktop 對照
+
+| 指令 | GitHub Desktop |
+|---|---|
+| `git clone` | File → Clone repository → 選 `ntu-meal-planner` |
+| `git pull` | 上方 **Fetch origin** → **Pull origin** |
+| `git add` + `git commit` | 左下填說明 → **Commit to main** |
+| `git push` | 上方 **Push origin** |
+| 開分支 | 上方 Current branch → **New branch** |
 
 ---
 
