@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>台大平價餐點選單</title>
+  <meta name="description" content="台大校內與公館周邊平價餐點：一週 2000 元三餐排程、依金額找餐點，支援素食、穆斯林友善與忌口篩選。">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&family=Noto+Serif+TC:wght@700;900&family=IBM+Plex+Mono:wght@500;600&display=swap">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>台大平價餐點選單</h1>
+      <p class="lede">設定一週預算與飲食條件，自動排出七天三餐（可加飲料、咖啡或點心），範圍包含台大校內、水源市場、公館、新生南路與和平東路 118 巷一帶。也可以輸入想花的金額，找出這個價位的餐點。</p>
+    </div>
+    <button class="theme-btn" id="themeBtn" type="button">深色／淺色</button>
+  </header>
+
+  <!-- 共用條件：排菜單與依預算找都會套用 -->
+  <details class="board" id="settings" open style="margin-top:20px">
+    <summary>飲食條件 <span class="hint" id="profileSummary"></span></summary>
+    <div class="row">
+      <div class="field"><span class="label">素食</span><div class="chips" id="dietChips"></div></div>
+      <div class="field"><span class="label">穆斯林</span><div class="chips" id="muslimChips"></div></div>
+    </div>
+    <div class="field"><span class="label">忌口（點選＝不吃）</span><div class="chips avoid" id="avoidChips"></div></div>
+    <div class="field"><span class="label">想多吃一點</span><div class="chips" id="preferChips"></div></div>
+    <div class="field"><span class="label">區域</span><div class="chips" id="areaChips"></div></div>
+    <label class="check"><input type="checkbox" id="incCheck" checked> 包含價格或營業時間「待確認」的餐點</label>
+    <p class="notice">成分標註是依店名與餐名推測；有過敏或宗教飲食需求，請以店家說明為準。「穆斯林友善」只排除豬肉與酒，不等於清真認證；「僅清真認證／素食」只會選台灣清真推廣中心列出的穆斯林餐廳，以及素食品項。</p>
+  </details>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tab-plan" aria-selected="true" aria-controls="p-plan">排一週菜單</button>
+    <button class="tab" role="tab" id="tab-find" aria-selected="false" aria-controls="p-find">依金額找</button>
+    <button class="tab" role="tab" id="tab-data" aria-selected="false" aria-controls="p-data">餐點資料</button>
+  </nav>
+
+  <!-- 排一週菜單 -->
+  <section class="panel" id="p-plan" role="tabpanel" aria-labelledby="tab-plan">
+    <div class="board no-print">
+      <div class="row">
+        <div class="field"><label class="label" for="budget">一週預算（NT$）</label><input type="number" id="budget" value="2000" min="300" step="50"></div>
+        <div class="field"><label class="label" for="reserve">預留不花（NT$）</label><input type="number" id="reserve" value="100" min="0" step="50"></div>
+        <div class="field">
+          <label class="label" for="extras">一週加點飲料／點心 <output id="extrasOut" class="num">3</output> 次</label>
+          <input type="range" id="extras" min="0" max="14" step="1" value="3">
+        </div>
+      </div>
+      <div class="field"><span class="label">加點類型</span><div class="chips" id="extraKindChips"></div></div>
+      <div class="btns">
+        <button class="btn" id="genPlan" type="button">排一份菜單</button>
+        <button class="btn ghost" id="copyPlan" type="button">複製文字</button>
+        <button class="btn ghost" id="printPlan" type="button">列印</button>
+      </div>
+      <p class="notice">從週一排到週日，每餐只選當天有營業、符合條件的店；盡量不重複，總花費不超過「預算 − 預留」。每按一次會換一組。</p>
+    </div>
+    <div id="planOut" class="panel" style="padding-top:0"></div>
+  </section>
+
+  <!-- 依金額找 -->
+  <section class="panel" id="p-find" role="tabpanel" aria-labelledby="tab-find" hidden>
+    <div class="board">
+      <div class="row">
+        <div class="field">
+          <span class="label">想花多少</span>
+          <div class="big-price"><span class="num">NT$</span><output id="targetOut">60</output></div>
+          <input type="range" id="target" min="20" max="200" step="5" value="60" aria-label="想花的金額">
+        </div>
+        <div class="field"><span class="label">可接受的差距</span><div class="chips" id="tolChips"></div></div>
+      </div>
+      <div class="row">
+        <div class="field"><span class="label">哪一餐</span><div class="chips" id="mealChips"></div></div>
+        <div class="field"><label class="label" for="dow">星期</label><select id="dow"></select></div>
+      </div>
+      <label class="check"><input type="checkbox" id="combo"> 也找兩樣湊成的組合（例如正餐＋飲料）</label>
+    </div>
+    <p class="summary" id="findSummary"></p>
+    <div class="results" id="findResults"></div>
+  </section>
+
+  <!-- 餐點資料 -->
+  <section class="panel" id="p-data" role="tabpanel" aria-labelledby="tab-data" hidden>
+    <p class="notice">修改價格、狀態或新增餐點會存在這台裝置的瀏覽器裡。想更新給所有人：按「匯出 JSON」，把內容貼回 <code>js/data.js</code> 再推上 GitHub。</p>
+    <div class="btns">
+      <button class="btn ghost" id="exportBtn" type="button">匯出 JSON</button>
+      <button class="btn ghost" id="resetBtn" type="button">清除我的修改</button>
+    </div>
+    <details class="board" id="addBox">
+      <summary>新增餐點</summary>
+      <form class="addform" id="addForm">
+        <label class="field"><span class="label">店家</span><input type="text" id="fStore" required></label>
+        <label class="field"><span class="label">餐點</span><input type="text" id="fItem" required></label>
+        <label class="field"><span class="label">價格（NT$）</span><input type="number" id="fPrice" min="1" required></label>
+        <label class="field"><span class="label">區域</span><select id="fArea"></select></label>
+        <label class="field"><span class="label">類型</span><select id="fKind"><option>正餐</option><option>點心</option><option>飲料</option><option>咖啡</option></select></label>
+        <label class="field"><span class="label">素食程度</span><select id="fDiet"><option value="meat">葷</option><option value="ovo-lacto">蛋奶素</option><option value="vegan">全素</option></select></label>
+        <label class="field"><span class="label">位置</span><input type="text" id="fPlace"></label>
+        <label class="field"><span class="label">營業時間</span><input type="text" id="fHours"></label>
+        <label class="check full"><input type="checkbox" id="fHalal"> 清真認證／列於穆斯林餐廳名單</label>
+        <div class="field full"><span class="label">適合哪一餐</span><div class="chips" id="fMeals"></div></div>
+        <div class="field full"><span class="label">含有</span><div class="chips" id="fContains"></div></div>
+        <div class="field full"><span class="label">營業日</span><div class="chips" id="fDays"></div></div>
+        <div class="full"><button class="btn" type="submit">加入清單</button></div>
+      </form>
+    </details>
+    <div class="board toolbar">
+      <div class="row">
+        <label class="field grow"><span class="label">搜尋店家或餐點</span><input type="search" id="mSearch" placeholder="例如：牛肉麵、蛋餅、118巷" autocomplete="off"></label>
+        <label class="field"><span class="label">排序</span>
+          <select id="mSort"><option value="area">依區域</option><option value="cheap">最低價由低到高</option><option value="name">依店名</option></select></label>
+      </div>
+      <div class="field"><span class="label">區域</span><div class="chips" id="mArea"></div></div>
+      <div class="row">
+        <label class="check"><input type="checkbox" id="mOpenToday"> 只看今天有營業</label>
+        <label class="check"><input type="checkbox" id="mCheckOnly"> 只看有「待確認」的店</label>
+        <button class="btn ghost small" id="mExpand" type="button">全部展開</button>
+      </div>
+    </div>
+    <p class="summary" id="manageSummary"></p>
+    <div id="manage" class="stores"></div>
+  </section>
+
+  <footer>
+    資料來源：Google 地圖商家資料、台大膳委會、愛食記、各美食部落格與台灣清真推廣中心。價格會變動，標示「待確認」者請先向店家確認。
+    穆斯林友善餐廳請另參考<a href="https://meals.ntu.edu.tw/board/detail/sn/2107" target="_blank" rel="noopener">台大膳委會「穆斯林友善餐廳」地圖</a>。
+  </footer>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="js/data.js"></script>
+<script src="js/planner.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
