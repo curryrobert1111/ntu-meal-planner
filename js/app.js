@@ -114,9 +114,9 @@
     });
   }
 
-  function cell(o) {
-    if (!o) return el("td", { class: "warn", text: "沒有可選的餐點" });
-    return el("td", {},
+  function cell(o, label) {
+    if (!o) return el("td", { class: "warn", "data-label": label, text: "沒有可選的餐點" });
+    return el("td", { "data-label": label },
       el("div", {}, o.parts.map(f => f.item).join(" ＋ "), " ", el("span", { class: "p", text: String(o.price) })),
       el("div", { class: "meta", text: [...new Set(o.parts.map(f => f.store))].join("、") }),
       o.flags.length ? el("div", {}, o.flags.map(flagPill)) : null);
@@ -130,18 +130,19 @@
       remaining -= d.subtotal;
       const pct = plan.budget ? Math.max(0, Math.min(100, (remaining / plan.budget) * 100)) : 0;
       const extra = d.加點.length
-        ? el("td", {}, d.加點.map(x => el("div", { style: "margin-bottom:6px" },
+        ? el("td", { class: "extra", "data-label": "加點" }, d.加點.map(x => el("div", { class: "extra-item" },
             el("div", {}, x.parts[0].item, " ", el("span", { class: "p", text: String(x.price) })),
             el("div", { class: "meta", text: x.parts[0].store }))))
-        : el("td", { class: "meta", text: "—" });
+        : el("td", { class: "extra meta empty-cell", "data-label": "加點", text: "—" });
       return el("tr", {},
         el("th", { scope: "row", text: d.name }),
-        cell(d.早餐), cell(d.午餐), cell(d.晚餐), extra,
-        el("td", { class: "money", text: String(d.subtotal) }),
-        el("td", { class: "money" }, String(remaining), el("div", { class: "left-bar" }, el("span", { style: `width:${pct}%` }))));
+        cell(d.早餐, "早餐"), cell(d.午餐, "午餐"), cell(d.晚餐, "晚餐"), extra,
+        el("td", { class: "money", "data-label": "小計", text: String(d.subtotal) }),
+        el("td", { class: "money", "data-label": "剩餘" }, String(remaining), el("div", { class: "left-bar" }, el("span", { style: `width:${pct}%` }))));
     });
-    const table = el("table", {},
-      el("thead", {}, el("tr", {}, ["", "早餐", "午餐", "晚餐", "加點", "小計", "剩餘"].map(h => el("th", { text: h })))),
+    const table = el("table", { class: "plan-table" },
+      el("colgroup", {}, ["day", "meal", "meal", "meal", "meal", "money", "money-left"].map(c => el("col", { class: "c-" + c }))),
+      el("thead", {}, el("tr", {}, ["", "早餐", "午餐", "晚餐", "加點", "小計", "剩餘"].map(h => el("th", { scope: "col", text: h })))),
       el("tbody", {}, rows));
     const leftOk = plan.left >= (Number(profile.reserve) || 0);
     $("planOut").replaceChildren(
