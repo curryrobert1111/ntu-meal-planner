@@ -257,6 +257,39 @@
   }
 
   /** 把菜單轉成純文字（LINE Bot 與「複製」按鈕用） */
+  /* ---------- 把排好的菜單放進網址（LINE Bot 的「完整表格」連結用） ----------
+   * 格式：b=預算&plan=週一D週二D…D週日
+   * 每天：早餐M午餐M晚餐M加點；一餐有兩樣時用 P 連接，多個加點用 E 隔開，空的時段留空
+   * 餐點 id 只有小寫英數與 -，所以用大寫字母當分隔，網址不會被 LINE 截斷
+   */
+  function planToParam(plan) {
+    const ids = o => (o ? o.parts.map(f => f.id).join("P") : "");
+    const days = plan.days.map(d => [ids(d.早餐), ids(d.午餐), ids(d.晚餐), d.加點.map(ids).join("E")].join("M"));
+    return "b=" + (Number(plan.budget) || 0) + "&plan=" + encodeURIComponent(days.join("D"));
+  }
+  /** 從網址參數還原菜單；找不到的餐點（資料已更新）會列在 missing */
+  function planFromParam(foods, planStr, budget, profile) {
+    const p = Object.assign(defaultProfile(), profile || {});
+    const byId = new Map(foods.map(f => [f.id, f]));
+    const missing = [];
+    const one = str => {
+      if (!str) return null;
+      const parts = str.split("P").map(id => { const f = byId.get(id); if (!f) missing.push(id); return f; });
+      return parts.every(Boolean) ? wrap(parts, p) : null;
+    };
+    const raw = String(planStr || "").split("D");
+    const days = WEEK.map((d, i) => {
+      const [b = "", l = "", n = "", e = ""] = (raw[i] || "").split("M");
+      const day = { dow: d, name: DAYNAMES[d], 早餐: one(b), 午餐: one(l), 晚餐: one(n), 加點: e ? e.split("E").map(one).filter(Boolean) : [], subtotal: 0 };
+      day.subtotal = [day.早餐, day.午餐, day.晚餐, ...day.加點].filter(Boolean).reduce((s, o) => s + o.price, 0);
+      return day;
+    });
+    const total = days.reduce((s, d) => s + d.subtotal, 0);
+    const bud = Number(budget) || Number(p.budget) || 0;
+    const warnings = missing.length ? [`有 ${missing.length} 項餐點的資料已經更新或移除，表格中以「沒有可選的餐點」顯示。可以按「排一份菜單」重新排。`] : [];
+    return { days, total, cap: bud - (Number(p.reserve) || 0), budget: bud, left: bud - total, warnings, filled: !missing.length, shared: true };
+  }
+
   function planToText(plan) {
     const name = o => (o ? `${o.parts.map(f => f.item).join("＋")}（${[...new Set(o.parts.map(f => f.store))].join("、")}）$${o.price}` : "—");
     const lines = [`台大一週菜單｜合計 $${plan.total}／預算 $${plan.budget}，剩 $${plan.left}`];
@@ -269,7 +302,7 @@
     return lines.join("\n");
   }
 
-  const api = { MIN_MAIN, isMain, MEALS, DAYNAMES, WEEK, AREAS, TAGS, DIETS, MUSLIM, defaultProfile, check, opensOn, optionsFor, makePlan, findByPrice, planToText };
+  const api = { MIN_MAIN, isMain, MEALS, DAYNAMES, WEEK, AREAS, TAGS, DIETS, MUSLIM, defaultProfile, check, opensOn, optionsFor, makePlan, findByPrice, planToText, planToParam, planFromParam };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Planner = api;
 })(typeof window !== "undefined" ? window : globalThis);

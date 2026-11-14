@@ -84,7 +84,10 @@ function chunk(text) {
 
 /* ---------- 指令處理 ---------- */
 function handleText(uid, raw) {
-  const text = raw.trim().replace(/\s+/g, " ");
+  // 全形數字、全形 $ 轉半形（手機中文輸入法常打出「８０」）
+  const text = raw.trim()
+    .replace(/[０-９＄]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0))
+    .replace(/\s+/g, " ");
   const p = getProfile(uid);
   let m;
 
@@ -114,12 +117,18 @@ function handleText(uid, raw) {
 
   if (/^(菜單|排菜單|一週菜單|排餐)$/.test(text)) {
     const plan = P.makePlan(FOODS, p);
-    return P.planToText(plan) + (WEB_URL ? `\n\n完整表格：${WEB_URL}` : "");
+    // 「完整表格」連結帶上這份菜單，網頁打開時會顯示同一份
+    const link = WEB_URL ? WEB_URL + (WEB_URL.includes("?") ? "&" : "?") + P.planToParam(plan) : "";
+    return P.planToText(plan) + (link ? `\n\n完整表格：${link}` : "");
   }
 
   if ((m = text.match(/^\$?(\d{2,3})\s*(元|塊)?$/))) {
     const target = Number(m[1]);
-    const hits = P.findByPrice(FOODS, target, p, { tol: 15, dow: new Date().getDay(), limit: 8 });
+    // 先多找一些，再每家店最多取 2 道，避免整頁都是同一家
+    const perStore = new Map();
+    const hits = P.findByPrice(FOODS, target, p, { tol: 15, dow: new Date().getDay(), limit: 60 })
+      .filter(h => { const s = h.parts[0].store; const n = perStore.get(s) || 0; perStore.set(s, n + 1); return n < 2; })
+      .slice(0, 8);
     if (!hits.length) return `今天 $${target} 左右找不到符合條件的餐點，試試別的金額。`;
     return `今天 $${target} 左右：\n` + hits.map(h => {
       const f = h.parts[0];
@@ -156,6 +165,6 @@ app.use((err, req, res, next) => {
   next(err);
 });
 
-const port = process.env.PORT || 3000;
+const port = process.env.PORT || 3000;   // Render、Cloud Run 都會自動給 PORT
 if (require.main === module) app.listen(port, () => console.log(`LINE bot listening on :${port}`));
 module.exports = { handleText };

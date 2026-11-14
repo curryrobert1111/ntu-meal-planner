@@ -21,6 +21,9 @@ ntu-meal-planner/
 
 本機預覽：直接用瀏覽器打開 `index.html` 即可，不需要安裝任何東西。
 
+LINE Bot 部署到 Google Cloud Run 的完整步驟見 [`linebot/CLOUD_RUN.md`](linebot/CLOUD_RUN.md)。
+
+
 ## 新增或修改餐點
 
 打開 `js/data.js`，照既有格式加一行，例如：

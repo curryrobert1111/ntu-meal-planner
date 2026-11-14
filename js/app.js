@@ -77,7 +77,7 @@
     $("profileSummary").textContent = "｜" + parts.join("；");
   }
   function setupSettings() {
-    const onChange = () => { saveProfile(); rerender(); };
+    const onChange = () => { saveProfile(); dropShared(); rerender(); };
     single($("dietChips"), Object.entries(DIETS), profile.diet, v => { profile.diet = v; onChange(); });
     single($("muslimChips"), Object.entries(MUSLIM), profile.muslim, v => { profile.muslim = v; onChange(); });
 
@@ -101,13 +101,13 @@
   function setupPlan() {
     $("budget").value = profile.budget; $("reserve").value = profile.reserve;
     $("extras").value = profile.extras; $("extrasOut").textContent = profile.extras;
-    $("budget").addEventListener("change", e => { profile.budget = Math.max(0, Number(e.target.value) || 0); saveProfile(); renderPlan(); });
-    $("reserve").addEventListener("change", e => { profile.reserve = Math.max(0, Number(e.target.value) || 0); saveProfile(); renderPlan(); });
+    $("budget").addEventListener("change", e => { profile.budget = Math.max(0, Number(e.target.value) || 0); saveProfile(); renderPlan(true); });
+    $("reserve").addEventListener("change", e => { profile.reserve = Math.max(0, Number(e.target.value) || 0); saveProfile(); renderPlan(true); });
     $("extras").addEventListener("input", e => { profile.extras = Number(e.target.value); $("extrasOut").textContent = profile.extras; });
-    $("extras").addEventListener("change", () => { saveProfile(); renderPlan(); });
+    $("extras").addEventListener("change", () => { saveProfile(); renderPlan(true); });
     const kinds = new Set(profile.extraKinds);
-    multi($("extraKindChips"), ["飲料", "咖啡", "點心"].map(k => [k, k]), kinds, () => { profile.extraKinds = [...kinds]; saveProfile(); renderPlan(); });
-    $("genPlan").addEventListener("click", renderPlan);
+    multi($("extraKindChips"), ["飲料", "咖啡", "點心"].map(k => [k, k]), kinds, () => { profile.extraKinds = [...kinds]; saveProfile(); renderPlan(true); });
+    $("genPlan").addEventListener("click", () => renderPlan(true));
     $("printPlan").addEventListener("click", () => window.print());
     $("copyPlan").addEventListener("click", async () => {
       if (!lastPlan) return;
@@ -124,8 +124,17 @@
       o.flags.length ? el("div", {}, o.flags.map(flagPill)) : null);
   }
 
-  function renderPlan() {
-    const plan = P.makePlan(foods(), profile);
+  // LINE Bot 傳來的「完整表格」連結會帶 ?plan=…，第一次打開時顯示同一份菜單
+  const shared = (() => { try { const q = new URLSearchParams(location.search); return q.get("plan") ? { plan: q.get("plan"), budget: q.get("b") } : null; } catch (e) { return null; } })();
+  let useShared = !!shared;
+  function dropShared() {   // 改回自己排，並把網址的參數拿掉
+    if (!useShared) return;
+    useShared = false;
+    try { history.replaceState(null, "", location.pathname + location.hash); } catch (e) {}
+  }
+  function renderPlan(fresh) {
+    if (fresh === true) dropShared();   // 按「排一份菜單」或改了預算等條件
+    const plan = useShared ? P.planFromParam(foods(), shared.plan, shared.budget, profile) : P.makePlan(foods(), profile);
     lastPlan = plan;
     let remaining = plan.budget;
     const rows = plan.days.map(d => {
@@ -155,7 +164,8 @@
           el("div", {}, el("span", { class: "label", text: "七天合計" }), el("b", { text: `NT$${plan.total}` })),
           el("div", {}, el("span", { class: "label", text: "剩餘金額" }), el("b", { style: `color:var(${leftOk ? "--ok" : "--warn"})`, text: `NT$${plan.left}` })),
           el("div", {}, el("span", { class: "label", text: "平均每天" }), el("b", { text: `NT$${Math.round(plan.total / 7)}` }))),
-        plan.warnings.map(w => el("p", { class: "warn", text: w }))),
+        plan.warnings.map(w => el("p", { class: "warn", text: w })),
+        plan.shared ? el("p", { class: "notice shared-note" }, "這是 LINE Bot 幫你排的菜單。想換一份，按上面的「排一份菜單」。") : null),
       el("div", { class: "plan-wrap" }, table),
       el("p", { class: "notice", text: "價格與營業日以清單為準；標示「待確認」的餐點請先向店家確認。自助餐以一盤約 400 g 估價。" }));
   }

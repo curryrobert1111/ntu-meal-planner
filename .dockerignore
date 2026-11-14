@@ -1,0 +1,10 @@
+# 不需要放進 bot 容器的檔案（讓建置更快、映像檔更小）
+.git
+**/node_modules
+**/.env
+Claude outputs
+*.png
+*.jpg
+css
+index.html
+README.md
