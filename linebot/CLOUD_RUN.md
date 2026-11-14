@@ -86,6 +86,7 @@
 | `LINE_CHANNEL_SECRET` | LINE Developers → Basic settings → Channel secret |
 | `LINE_CHANNEL_ACCESS_TOKEN` | LINE Developers → Messaging API → Channel access token (long-lived) |
 | `WEB_URL` | `https://curryrobert1111.github.io/ntu-meal-planner/` |
+| `GEMINI_API_KEY`（選填） | 要開 AI 自由對話才填，見 [`GEMINI.md`](GEMINI.md) |
 
    - 名稱要完全照抄（大小寫、底線）。值的前後不要有空白或引號。
    - **不要設 `PORT`**，Cloud Run 會自動提供。

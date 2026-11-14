@@ -16,6 +16,8 @@
  *   設定                   → 看目前條件
  *   說明                   → 指令列表
  *
+ *   其他任何句子             → 有設定 GEMINI_API_KEY 時交給 Gemini 回答（見 gemini.js、GEMINI.md）
+ *
  * 使用者設定存在記憶體（重新部署會清空）；要長期保存可改用 Firestore、Redis 等。
  */
 require("dotenv").config();
@@ -23,6 +25,7 @@ const express = require("express");
 const line = require("@line/bot-sdk");
 const FOODS = require("../js/data.js");
 const P = require("../js/planner.js");
+const { askGemini, enabled: aiEnabled } = require("./gemini");
 
 const config = {
   channelSecret: process.env.LINE_CHANNEL_SECRET,
@@ -66,6 +69,7 @@ const HELP = [
   "・80：找今天 80 元左右的餐點（會先問你要哪一類）",
   "・正餐 80／早餐 50／飲料 50／點心 40／咖啡 80：直接找某一類",
   "・設定：看目前條件",
+  "・也可以直接用一句話問，例如「公館有什麼便宜的拉麵」",
 ].join("\n");
 
 const quickReply = {
@@ -130,6 +134,8 @@ function chunk(text) {
   return out.slice(0, 5);
 }
 
+const planLink = plan => (WEB_URL ? WEB_URL + (WEB_URL.includes("?") ? "&" : "?") + P.planToParam(plan) : "");
+
 /* ---------- 指令處理 ---------- */
 function handleText(uid, raw) {
   // 全形數字、全形 $ 轉半形（手機中文輸入法常打出「８０」）
@@ -166,7 +172,7 @@ function handleText(uid, raw) {
   if (/^(菜單|排菜單|一週菜單|排餐)$/.test(text)) {
     const plan = P.makePlan(FOODS, p);
     // 「完整表格」連結帶上這份菜單，網頁打開時會顯示同一份
-    const link = WEB_URL ? WEB_URL + (WEB_URL.includes("?") ? "&" : "?") + P.planToParam(plan) : "";
+    const link = planLink(plan);
     return P.planToText(plan) + (link ? `\n\n完整表格：${link}` : "");
   }
 
@@ -194,7 +200,7 @@ function handleText(uid, raw) {
     return reply(`想找多少錢左右的「${CATS[cat].label}」？點下面的金額，或直接打數字（例如 80）。`, prices.map(n => [`${n} 元`, `${cat} ${n}`]));
   }
 
-  return reply("看不懂這個指令 🙏\n\n" + HELP);
+  return null;   // 不是固定指令：交給 Gemini（沒設定金鑰時回「看不懂」）
 }
 
 async function handleEvent(event) {
@@ -203,7 +209,11 @@ async function handleEvent(event) {
   }
   if (event.type !== "message" || event.message.type !== "text") return null;
   const uid = (event.source && event.source.userId) || "anon";
-  const r = handleText(uid, event.message.text);
+  let r = handleText(uid, event.message.text);
+  if (r === null) {
+    const ai = await askGemini(uid, event.message.text, { FOODS, P, getProfile, describe, planLink });
+    r = ai || reply("看不懂這個指令 🙏\n\n" + HELP);
+  }
   const { text, buttons } = typeof r === "string" ? { text: r } : r;
   const messages = chunk(text).map(t => ({ type: "text", text: t }));
   messages[messages.length - 1].quickReply = buttons ? qr(buttons) : quickReply;
@@ -225,5 +235,5 @@ app.use((err, req, res, next) => {
 });
 
 const port = process.env.PORT || 3000;   // Render、Cloud Run 都會自動給 PORT
-if (require.main === module) app.listen(port, () => console.log(`LINE bot listening on :${port}`));
-module.exports = { handleText };
+if (require.main === module) app.listen(port, () => console.log(`LINE bot listening on :${port}（AI 對話：${aiEnabled() ? "開啟" : "未設定 GEMINI_API_KEY，關閉"}）`));
+module.exports = { handleText, handleEvent, getProfile, describe, planLink, FOODS, P };
