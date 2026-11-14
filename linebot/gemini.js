@@ -7,14 +7,18 @@
  * 環境變數：
  *   GEMINI_API_KEY   必填，在 Google AI Studio 申請
  *   GEMINI_MODEL     選填，預設 gemini-3.5-flash-lite（舊模型下架時，改這個變數就好）
+ *   AI_WEB_SEARCH    選填，設成 1 時讓 AI 遇到看不懂的梗可以上 Google 查（Gemini 3 以上模型才支援）
  *   AI_DAILY_LIMIT   選填，每位使用者每天最多幾則 AI 回覆，預設 30
  *   AI_GLOBAL_LIMIT  選填，整個 bot 每天最多幾則 AI 回覆，預設 1500（防止費用暴增）
  */
+
+const MEMES = require("./memes");   // 梗小辭典，見 memes.js
 const API = "https://generativelanguage.googleapis.com/v1beta/models";
 const MODEL = (process.env.GEMINI_MODEL || "gemini-3.5-flash-lite").trim();
 const DAILY = Number(process.env.AI_DAILY_LIMIT) || 30;
 const GLOBAL = Number(process.env.AI_GLOBAL_LIMIT) || 1500;
 const enabled = () => !!process.env.GEMINI_API_KEY;
+let webSearch = /^(1|true|on|yes)$/i.test((process.env.AI_WEB_SEARCH || "").trim());
 
 const AREAS = ["校內", "水源市場", "公館", "新生南路", "118巷"];
 const CATS = ["正餐", "早餐", "午餐", "晚餐", "飲料", "咖啡", "點心", "全部"];
@@ -169,19 +173,25 @@ function systemPrompt() {
     "你是「台大平價餐點選單」的 LINE 小幫手，幫台大學生找校園附近（校內、水源市場、公館、新生南路、和平東路二段118巷）平價的吃的、喝的。",
     `今天是 ${twDate()}（星期${wd}），時間 ${d.toISOString().slice(11, 16)}（台灣時間）。`,
     "規則：",
-    "1. 店名、餐點、價格、地點、營業時間只能用工具查到的資料，絕對不可以自己編造或用你原本知道的資訊。查不到就老實說沒有資料。",
+    "1. 店名、餐點、價格、地點、營業時間只能用 search_food、store_info 等工具查到的資料，絕對不可以自己編造或用你原本知道的資訊（包括網路搜尋到的店家資訊）。查不到就老實說沒有資料。",
     "2. 使用者提到想吃什麼、多少錢、在哪裡、哪家店，先呼叫工具再回答。條件不夠時可以先查「全部」，或簡短反問一個問題。",
     "3. 回答用繁體中文、口語、簡短：最多 8 行。列餐點時每行格式「・品名｜店名（區域）$價格」。",
     "4. LINE 不支援 Markdown，不要用 **、#、表格。可以用少量 emoji。",
     "5. 標示「待確認」的品項要提醒使用者先跟店家確認。",
-    "6. 和吃飯、台大周邊美食無關的問題，用一句話友善地拉回主題。不要提供醫療、減重處方等專業建議。",
+    "6. 閒聊、打招呼、網路梗、流行語、迷因、時事哏：可以用你自己的知識自然地回應，像朋友聊天一樣接梗，1～3 句就好；聊得上的話順勢帶到吃的（例如依梗的情境推薦餐點，推薦時照規則 1 先查工具）。",
+    "6-1. 看不懂的梗或流行語，" + (webSearch ? "可以用 Google 搜尋確認意思；" : "") + "還是不確定就老實說不太懂這個梗、請對方解釋，不要硬掰。",
+    "6-2. 和吃飯無關的大型任務（寫作業、寫程式、長篇文章、翻譯）友善婉拒並拉回主題。不要提供醫療、減重處方等專業建議。",
     "7. 使用者要求修改預算、素食、忌口、區域時才呼叫 update_preferences。",
+    "8. 接梗要友善：不要捏造名人說過的話、不要嘲笑或批評任何人，避免歧視、色情、政治立場與人身攻擊；梗本身不適當時就不接，直接幫忙找吃的。",
+    "9. 下面的梗小辭典是台大／在地用語的補充說明，以小辭典為準；不在小辭典裡的梗照規則 6 處理。",
+    "梗小辭典：",
+    ...MEMES.map(m => `・${m.key}：${m.meaning} 回覆方向：${m.reply}`),
   ].join("\n");
 }
 
 let useThinkingCfg = /gemini-3/.test(MODEL);   // Gemini 3 預設會「思考」，設成 low 讓回覆快一點、便宜一點
 async function callGemini(contents, signal) {
-  const generationConfig = { temperature: 0.4, maxOutputTokens: 2048 };
+  const generationConfig = { temperature: 0.6, maxOutputTokens: 2048 };
   if (useThinkingCfg) generationConfig.thinkingConfig = { thinkingLevel: "low" };
   const res = await fetch(`${API}/${encodeURIComponent(MODEL)}:generateContent`, {
     method: "POST",
@@ -189,7 +199,7 @@ async function callGemini(contents, signal) {
     body: JSON.stringify({
       systemInstruction: { parts: [{ text: systemPrompt() }] },
       contents,
-      tools: [{ functionDeclarations: TOOL_DECLS }],
+      tools: webSearch ? [{ functionDeclarations: TOOL_DECLS }, { google_search: {} }] : [{ functionDeclarations: TOOL_DECLS }],
       generationConfig,
     }),
     signal,
@@ -198,6 +208,10 @@ async function callGemini(contents, signal) {
   if (!res.ok) {
     const msg = (data.error && data.error.message) || res.statusText;
     if (res.status === 400 && useThinkingCfg && /thinking/i.test(msg)) { useThinkingCfg = false; return callGemini(contents, signal); }   // 這個模型不支援 thinkingLevel 就拿掉重試
+    if (res.status === 400 && webSearch && /search|tool/i.test(msg)) {   // 這個模型不能同時用搜尋和自訂工具，就關掉搜尋重試
+      console.warn("[gemini] 這個模型不支援 Google 搜尋搭配工具，已關閉 AI_WEB_SEARCH：", msg);
+      webSearch = false; return callGemini(contents, signal);
+    }
     const err = new Error(`Gemini ${res.status}: ${msg}`); err.status = res.status; throw err;
   }
   const cand = data.candidates && data.candidates[0];
