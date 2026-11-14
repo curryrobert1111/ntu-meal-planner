@@ -1,0 +1,4 @@
+# 統一用 LF 換行，避免 Windows 與 Mac 協作時整個檔案顯示成已修改
+* text=auto eol=lf
+*.png binary
+*.jpg binary

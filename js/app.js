@@ -72,7 +72,9 @@
     if (profile.muslim !== "off") parts.push(MUSLIM[profile.muslim]);
     if (profile.avoid.length) parts.push("不吃" + profile.avoid.map(t => TAGS[t]).join("、"));
     if (profile.areas.length < AREAS.length) parts.push(profile.areas.join("、"));
-    $("profileSummary").textContent = parts.length ? "｜" + parts.join("；") : "｜不限";
+    parts.unshift(`預算 NT$${profile.budget}`);
+    if (!profile.areas.length || profile.areas.length === AREAS.length) parts.push("五區");
+    $("profileSummary").textContent = "｜" + parts.join("；");
   }
   function setupSettings() {
     const onChange = () => { saveProfile(); rerender(); };
@@ -135,7 +137,9 @@
             el("div", { class: "meta", text: x.parts[0].store }))))
         : el("td", { class: "extra meta empty-cell", "data-label": "加點", text: "—" });
       return el("tr", {},
-        el("th", { scope: "row", text: d.name }),
+        el("th", { scope: "row" }, el("span", { class: "day-name", text: d.name }),
+          el("span", { class: "day-sum" }, `小計 ${d.subtotal}・剩 ${remaining}`,
+            el("span", { class: "left-bar" }, el("span", { style: `width:${pct}%` })))),
         cell(d.早餐, "早餐"), cell(d.午餐, "午餐"), cell(d.晚餐, "晚餐"), extra,
         el("td", { class: "money", "data-label": "小計", text: String(d.subtotal) }),
         el("td", { class: "money", "data-label": "剩餘" }, String(remaining), el("div", { class: "left-bar" }, el("span", { style: `width:${pct}%` }))));
@@ -412,6 +416,8 @@
   function renderTab(t) { if (dirty[t]) { dirty[t] = false; renderers[t](); } }
   function rerender() { Object.keys(dirty).forEach(k => (dirty[k] = true)); renderTab(activeTab()); }
 
+  // 手機第一次打開時先收起「飲食條件」，讓菜單出現在第一個畫面
+  if (window.matchMedia && matchMedia("(max-width: 700px)").matches) $("settings").removeAttribute("open");
   setupTheme(); setupSettings(); setupPlan(); setupFind(); setupManage(); setupData(); setupTabs();
   rerender();
 })();

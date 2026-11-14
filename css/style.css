@@ -129,6 +129,7 @@ thead th { font-size: 12px; color: var(--muted); letter-spacing: .08em; font-wei
 .plan-table thead th { padding-top: 14px; padding-bottom: 14px; background: var(--bg); }
 .plan-table thead th:nth-child(n+6) { text-align: right; }
 tbody th { white-space: nowrap; }
+.plan-table .day-sum { display: none; }
 td .p { font-family: var(--font-num); color: var(--accent); font-weight: 600; }
 td .pill { margin-left: 0; margin-right: 4px; }
 td.money { font-family: var(--font-num); text-align: right; white-space: nowrap; }
@@ -213,7 +214,10 @@ footer { margin-top: 40px; color: var(--muted); font-size: 13px; }
   .plan-table tbody { display: grid; gap: 12px; }
   .plan-table tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
   .plan-table th, .plan-table td { display: block; padding: 12px 14px; border: 0; }
-  .plan-table tbody th { grid-column: 1 / -1; font-family: var(--font-display); font-size: 17px; padding-bottom: 4px; }
+  .plan-table tbody th { grid-column: 1 / -1; font-family: var(--font-display); font-size: 17px; padding-bottom: 8px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .plan-table .day-sum { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-num); font-size: 13px; font-weight: 500; color: var(--muted); white-space: nowrap; }
+  .plan-table .day-sum .left-bar { display: inline-block; width: 56px; margin-top: 0; }
+  .plan-table td.money { display: none; }
   .plan-table td + td { border-left: 0; }
   .plan-table td[data-label]::before { content: attr(data-label); display: block; font-size: 12px; color: var(--muted); letter-spacing: .08em; margin-bottom: 4px; }
   .plan-table td:nth-of-type(2n) { border-left: 1px solid var(--line); }

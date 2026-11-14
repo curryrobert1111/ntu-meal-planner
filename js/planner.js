@@ -44,6 +44,11 @@
   const isVeg = f => f.diet === "vegan" || f.diet === "ovo-lacto";
   const opensOn = (f, d) => !Array.isArray(f.days) || f.days.length === 0 || f.days.includes(d);
 
+  /** 一餐的最低價：低於這個價格的品項通常是小菜或配料，不單獨當午餐／晚餐 */
+  const MIN_MAIN = { 早餐: 25, 午餐: 50, 晚餐: 50 };
+  /** 可以當作「一餐」的品項：正餐、沒有標 noplan、價格達最低價 */
+  const isMain = (f, slot) => f.kind === "正餐" && !f.noplan && Number(f.price) >= (MIN_MAIN[slot] || 0);
+
   /** 單一餐點是否符合條件；回傳 { ok, flags } ，flags 是要提醒使用者的標記 */
   function check(f, p) {
     const flags = [];
@@ -80,7 +85,7 @@
 
   /** 偏好加權：符合想多吃的類型時權重較高 */
   function weight(o, p) {
-    let w = 1;
+    let w = o.cross ? 0.3 : 1;   // 早餐跨兩家店買比較麻煩，少選一點
     for (const f of o.parts) {
       for (const t of p.prefer || []) {
         if (t === "veg" ? isVeg(f) : has(f, t)) w += 2;
@@ -98,7 +103,8 @@
 
   function wrap(parts, p) {
     const flags = [...new Set(parts.flatMap(f => check(f, p).flags || []))];
-    return { parts, price: parts.reduce((s, f) => s + Number(f.price), 0), flags, key: parts.map(f => f.id).sort().join("+") };
+    const cross = new Set(parts.map(f => f.store)).size > 1;
+    return { parts, price: parts.reduce((s, f) => s + Number(f.price), 0), flags, cross, key: parts.map(f => f.id).sort().join("+") };
   }
 
   /** 從陣列中平均抽出最多 n 個（固定步長，結果穩定） */
@@ -113,13 +119,20 @@
   function optionsFor(foods, slot, d, p, okFn) {
     const ok = okFn || (f => check(f, p).ok);
     const pool = foods.filter(f => opensOn(f, d) && ok(f));
-    const singles = pool.filter(f => (f.meals || []).includes(slot)).map(f => wrap([f], p));
+    const singles = pool.filter(f => (f.meals || []).includes(slot) && isMain(f, slot)).map(f => wrap([f], p));
     if (slot !== "早餐") return singles;
-    const mains = thin(pool.filter(f => f.kind === "正餐" && (f.meals || []).includes("早餐") && Number(f.price) <= 50), 60);
-    const drinks = thin(pool.filter(f => (f.kind === "飲料" || f.kind === "咖啡") && Number(f.price) <= 35), 20);
+    // 早餐組合「正餐＋飲料」：先配同一家店，不夠再跨店（跨店的權重較低）
+    const mainsAll = pool.filter(f => isMain(f, "早餐") && (f.meals || []).includes("早餐") && Number(f.price) <= 55);
+    const drinksAll = pool.filter(f => (f.kind === "飲料" || f.kind === "咖啡") && Number(f.price) <= 40);
     const out = singles.slice();
+    const drinksByStore = new Map();
+    for (const b of drinksAll) { const a = drinksByStore.get(b.store) || []; a.push(b); drinksByStore.set(b.store, a); }
+    for (const a of mainsAll) for (const b of drinksByStore.get(a.store) || []) {
+      if (Number(a.price) + Number(b.price) <= 85) out.push(wrap([a, b], p));
+    }
+    const mains = thin(mainsAll, 40), drinks = thin(drinksAll, 15);
     for (const a of mains) for (const b of drinks) {
-      if (Number(a.price) + Number(b.price) <= 80) out.push(wrap([a, b], p));
+      if (a.store !== b.store && Number(a.price) + Number(b.price) <= 80) out.push(wrap([a, b], p));
     }
     return out;
   }
@@ -127,7 +140,7 @@
   function extraOptions(foods, d, p, okFn) {
     const ok = okFn || (f => check(f, p).ok);
     return foods
-      .filter(f => opensOn(f, d) && ok(f))
+      .filter(f => opensOn(f, d) && ok(f) && !f.noplan)
       .filter(f => (p.extraKinds || []).includes(f.kind) && ((f.meals || []).includes("點心") || (f.meals || []).includes("飲料")))
       .map(f => wrap([f], p));
   }
@@ -184,7 +197,8 @@
       const repeats = [...useCount.values()].reduce((s, v) => s + Math.max(0, v - 1), 0);
       const stores = new Set(picks.filter(Boolean).flatMap(o => o.parts.map(f => f.store))).size;
       const within = total <= cap;
-      const score = (within ? 1e6 : -total * 10) - missing * 1e5 - repeats * 300 + stores * 40 + (within ? total : 0)
+      const cross = picks.filter(o => o && o.cross).length;
+      const score = (within ? 1e6 : -total * 10) - missing * 1e5 - repeats * 300 - cross * 120 + stores * 40 + (within ? total : 0)
         + picks.filter(Boolean).reduce((s, o) => s + (weight(o, p) - 1) * 25, 0);
       if (!best || score > best.score) best = { picks, total, score, within, missing, repeats };
     }
@@ -215,12 +229,12 @@
     const tol = (o && o.tol) != null ? o.tol : 15;
     const meal = (o && o.meal) || "全部";
     const d = (o && o.dow) != null ? o.dow : new Date().getDay();
-    const pool = foods.filter(f => opensOn(f, d) && check(f, p).ok);
+    const pool = foods.filter(f => opensOn(f, d) && !f.noplan && check(f, p).ok);
     const mealOk = f => meal === "全部" || (f.meals || []).includes(meal);
     let hits = pool.filter(mealOk).filter(f => Math.abs(Number(f.price) - target) <= tol).map(f => wrap([f], p));
     if (o && o.combo) {
       // 主餐（符合餐別的正餐）＋配角（飲料／點心），只找價格加總落在範圍內的組合
-      const mains = pool.filter(f => mealOk(f) && f.kind === "正餐" && Number(f.price) < target + tol);
+      const mains = pool.filter(f => mealOk(f) && f.kind === "正餐" && Number(f.price) >= 25 && Number(f.price) < target + tol);
       const sides = pool.filter(f => f.kind !== "正餐").sort((a, b) => a.price - b.price);
       const prices = sides.map(f => Number(f.price));
       const lower = x => { let lo = 0, hi = prices.length; while (lo < hi) { const m = (lo + hi) >> 1; if (prices[m] < x) lo = m + 1; else hi = m; } return lo; };
@@ -255,7 +269,7 @@
     return lines.join("\n");
   }
 
-  const api = { MEALS, DAYNAMES, WEEK, AREAS, TAGS, DIETS, MUSLIM, defaultProfile, check, opensOn, optionsFor, makePlan, findByPrice, planToText };
+  const api = { MIN_MAIN, isMain, MEALS, DAYNAMES, WEEK, AREAS, TAGS, DIETS, MUSLIM, defaultProfile, check, opensOn, optionsFor, makePlan, findByPrice, planToText };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.Planner = api;
 })(typeof window !== "undefined" ? window : globalThis);
