@@ -22,7 +22,7 @@ Gemini 只負責「聽懂」和「說話」。店名、價格、營業時間都�
 
 | | 免費方案（預設） | 付費方案 |
 |---|---|---|
-| 費用 | 0 元 | 依用量計費；預設模型 gemini-2.5-flash-lite 一則約台幣 3 分錢 |
+| 費用 | 0 元 | 依用量計費；預設模型 gemini-3.5-flash-lite 一則約台幣 1 毛 |
 | 限制 | 每分鐘、每天有次數上限，超過會回「太忙了」 | 上限高很多 |
 | 資料 | 依 Google 條款，免費方案的內容**可能被用來改進 Google 的產品** | 不會被拿去訓練 |
 | 怎麼開 | 什麼都不用做 | AI Studio →「Billing」綁定 Google Cloud 帳單帳戶，並設定**每月花費上限** |
@@ -38,7 +38,7 @@ Gemini 只負責「聽懂」和「說話」。店名、價格、營業時間都�
 | 名稱 | 值 | 必填 |
 |---|---|---|
 | `GEMINI_API_KEY` | 第 1 步的金鑰 | 是 |
-| `GEMINI_MODEL` | 不填就用 `gemini-2.5-flash-lite`（最便宜）；想要更聰明可填 `gemini-2.5-flash` | 否 |
+| `GEMINI_MODEL` | 不填就用 `gemini-3.5-flash-lite`。Google 下架舊模型時，錯誤訊息會告訴你新名稱，改這個變數就好，不用改程式 | 否 |
 | `AI_DAILY_LIMIT` | 每位使用者每天最多幾則 AI 回覆，預設 `30` | 否 |
 | `AI_GLOBAL_LIMIT` | 整個 bot 每天最多幾則 AI 回覆，預設 `1500` | 否 |
 
@@ -106,7 +106,7 @@ Render／Cloud Run 會自動重新部署。部署完成後看記錄（Logs），
 | 自由對話都回「看不懂這個指令」 | 沒讀到金鑰，或呼叫 Gemini 失敗。看記錄裡 `[gemini]` 開頭的錯誤 |
 | 記錄出現 `Gemini 400 … API key not valid` | 金鑰貼錯（多了空白？），重新複製 |
 | 記錄出現 `Gemini 403` | 金鑰被停用，或所在專案沒有啟用 Gemini API；到 AI Studio 重建金鑰 |
-| 記錄出現 `Gemini 404 … model` | `GEMINI_MODEL` 名稱打錯或模型已下架，刪掉這個變數改用預設值 |
+| 記錄出現 `Gemini 404 … model … no longer available` | 模型已下架或名稱打錯。錯誤訊息會寫建議的新模型（例如 `gemini-3.5-flash-lite`），把它填進 `GEMINI_MODEL` |
 | 回「AI 小幫手現在太忙了」 | 超過免費方案的速度限制（429），等一分鐘再試；常發生就改付費方案 |
 | 回「今天的 AI 對話次數已經用完了」 | 達到 `AI_DAILY_LIMIT`，隔天（台灣時間）重置 |
 | AI 回答的店家或價格怪怪的 | AI 只會用資料裡的內容；請檢查 `js/data.js` 那筆資料是否正確 |

@@ -6,12 +6,12 @@
  *
  * 環境變數：
  *   GEMINI_API_KEY   必填，在 Google AI Studio 申請
- *   GEMINI_MODEL     選填，預設 gemini-2.5-flash-lite
+ *   GEMINI_MODEL     選填，預設 gemini-3.5-flash-lite（舊模型下架時，改這個變數就好）
  *   AI_DAILY_LIMIT   選填，每位使用者每天最多幾則 AI 回覆，預設 30
  *   AI_GLOBAL_LIMIT  選填，整個 bot 每天最多幾則 AI 回覆，預設 1500（防止費用暴增）
  */
 const API = "https://generativelanguage.googleapis.com/v1beta/models";
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
+const MODEL = (process.env.GEMINI_MODEL || "gemini-3.5-flash-lite").trim();
 const DAILY = Number(process.env.AI_DAILY_LIMIT) || 30;
 const GLOBAL = Number(process.env.AI_GLOBAL_LIMIT) || 1500;
 const enabled = () => !!process.env.GEMINI_API_KEY;
@@ -179,7 +179,10 @@ function systemPrompt() {
   ].join("\n");
 }
 
+let useThinkingCfg = /gemini-3/.test(MODEL);   // Gemini 3 預設會「思考」，設成 low 讓回覆快一點、便宜一點
 async function callGemini(contents, signal) {
+  const generationConfig = { temperature: 0.4, maxOutputTokens: 2048 };
+  if (useThinkingCfg) generationConfig.thinkingConfig = { thinkingLevel: "low" };
   const res = await fetch(`${API}/${encodeURIComponent(MODEL)}:generateContent`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
@@ -187,13 +190,14 @@ async function callGemini(contents, signal) {
       systemInstruction: { parts: [{ text: systemPrompt() }] },
       contents,
       tools: [{ functionDeclarations: TOOL_DECLS }],
-      generationConfig: { temperature: 0.4, maxOutputTokens: 800 },
+      generationConfig,
     }),
     signal,
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = (data.error && data.error.message) || res.statusText;
+    if (res.status === 400 && useThinkingCfg && /thinking/i.test(msg)) { useThinkingCfg = false; return callGemini(contents, signal); }   // 這個模型不支援 thinkingLevel 就拿掉重試
     const err = new Error(`Gemini ${res.status}: ${msg}`); err.status = res.status; throw err;
   }
   const cand = data.candidates && data.candidates[0];
