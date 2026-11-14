@@ -10,7 +10,9 @@
  *   穆斯林友善 / 清真 / 取消穆斯林
  *   不吃 牛肉 花生          → 設定忌口（豬肉 牛肉 雞肉 海鮮 蛋 奶 花生）
  *   清除忌口
- *   60 或 60元             → 找今天 NT$60 左右的餐點
+ *   80 / 80元              → 先問要哪一類（正餐、早餐、飲料、咖啡、點心、全部），再找今天 80 元左右的
+ *   正餐 80 / 飲料 50       → 直接找某一類
+ *   飲料 / 點心 / 正餐 …     → 先問要多少錢，再找
  *   設定                   → 看目前條件
  *   說明                   → 指令列表
  *
@@ -61,15 +63,61 @@ const HELP = [
   "・全素／蛋奶素／鍋邊素／不限素食",
   "・穆斯林友善／清真／取消穆斯林",
   "・不吃 牛肉 花生；清除忌口",
-  "・60元：找今天 60 元左右的餐點",
+  "・80：找今天 80 元左右的餐點（會先問你要哪一類）",
+  "・正餐 80／早餐 50／飲料 50／點心 40／咖啡 80：直接找某一類",
   "・設定：看目前條件",
 ].join("\n");
 
 const quickReply = {
-  items: ["菜單", "60元", "全素", "穆斯林友善", "不吃 牛肉", "設定"].map(t => ({
+  items: ["菜單", "正餐", "飲料", "點心", "80", "全素", "不吃 牛肉", "設定"].map(t => ({
     type: "action", action: { type: "message", label: t, text: t },
   })),
 };
+
+/** 每則回覆可以帶自己的快速按鈕；沒指定就用預設那組 */
+const qr = labels => ({ items: labels.slice(0, 13).map(([label, text]) => ({ type: "action", action: { type: "message", label: label.slice(0, 20), text: text || label } })) });
+const reply = (text, buttons) => ({ text, buttons });
+
+/** 依金額找的分類 */
+const CATS = {
+  正餐: { label: "正餐", test: f => P.isMain(f, "午餐"), meal: "全部" },
+  早餐: { label: "早餐", test: f => P.isMain(f, "早餐"), meal: "早餐" },
+  午餐: { label: "午餐", test: f => P.isMain(f, "午餐"), meal: "午餐" },
+  晚餐: { label: "晚餐", test: f => P.isMain(f, "晚餐"), meal: "晚餐" },
+  飲料: { label: "飲料", test: f => f.kind === "飲料" || f.kind === "咖啡", meal: "全部" },
+  咖啡: { label: "咖啡", test: f => f.kind === "咖啡", meal: "全部" },
+  點心: { label: "點心", test: f => f.kind === "點心", meal: "全部" },
+  全部: { label: "全部", test: () => true, meal: "全部" },
+};
+const CAT_ALIAS = { 主餐: "正餐", 吃飯: "正餐", 飯: "正餐", 喝的: "飲料", 手搖: "飲料", 手搖飲: "飲料", 茶: "飲料", 甜點: "點心", 小吃: "點心", 不限: "全部", 都可以: "全部" };
+const catOf = w => (CATS[w] ? w : CAT_ALIAS[w]) || null;
+const CAT_WORDS = [...Object.keys(CATS), ...Object.keys(CAT_ALIAS)].join("|");
+
+/** 台灣時間的星期幾（伺服器在國外，不能直接用 new Date().getDay()） */
+const twDow = () => new Date(Date.now() + 8 * 3600 * 1000).getUTCDay();
+
+/** 等待使用者回答「要哪一類」或「多少錢」：{ price?, cat?, at } */
+const pending = new Map();
+const PENDING_MS = 10 * 60 * 1000;
+
+function searchByPrice(p, target, catKey) {
+  const cat = CATS[catKey];
+  const perStore = new Map();
+  // 越接近目標價越前面，但同樣接近的隨機排，每次問都能看到不同的店
+  const hits = P.findByPrice(FOODS, target, p, { tol: 15, dow: twDow(), meal: cat.meal, limit: 2000 })
+    .filter(h => cat.test(h.parts[0]))
+    .map(h => ({ h, k: Math.abs(h.price - target) + Math.random() * 12 }))
+    .sort((a, b) => a.k - b.k).map(x => x.h)
+    .filter(h => { const s = h.parts[0].store; const n = perStore.get(s) || 0; perStore.set(s, n + 1); return n < 2; })
+    .slice(0, 8);
+  const again = [["換 " + (target - 20) + " 元", `${catKey} ${Math.max(10, target - 20)}`], ["換 " + (target + 20) + " 元", `${catKey} ${target + 20}`],
+    ...Object.keys(CATS).filter(k => k !== catKey && !["午餐", "晚餐"].includes(k)).map(k => [k, `${k} ${target}`])];
+  if (!hits.length) return reply(`今天 $${target} 左右找不到「${cat.label}」，試試別的金額或類別。`, again);
+  return reply(`今天 $${target} 左右的「${cat.label}」：\n` + hits.map(h => {
+    const f = h.parts[0];
+    return `・${f.item}｜${f.store}（${f.area}）$${h.price}${h.flags.length ? "（" + h.flags.join("、") + "）" : ""}`;
+  }).join("\n"), again);
+}
 
 /** LINE 單則文字上限 5000 字，最多 5 則 */
 function chunk(text) {
@@ -122,21 +170,31 @@ function handleText(uid, raw) {
     return P.planToText(plan) + (link ? `\n\n完整表格：${link}` : "");
   }
 
-  if ((m = text.match(/^\$?(\d{2,3})\s*(元|塊)?$/))) {
+  // 依金額找：「80」「80元」「正餐 80」「80 飲料」「飲料80元」都可以
+  const PRICE = "\\$?(\\d{2,3})\\s*(?:元|塊)?";
+  const both = text.match(new RegExp(`^(${CAT_WORDS})\\s*${PRICE}$`)) || text.match(new RegExp(`^${PRICE}\\s*(${CAT_WORDS})$`));
+  if (both) {
+    const [catWord, price] = isNaN(Number(both[1])) ? [both[1], both[2]] : [both[2], both[1]];
+    pending.delete(uid);
+    return searchByPrice(p, Number(price), catOf(catWord));
+  }
+  if ((m = text.match(new RegExp(`^${PRICE}$`)))) {
     const target = Number(m[1]);
-    // 先多找一些，再每家店最多取 2 道，避免整頁都是同一家
-    const perStore = new Map();
-    const hits = P.findByPrice(FOODS, target, p, { tol: 15, dow: new Date().getDay(), limit: 60 })
-      .filter(h => { const s = h.parts[0].store; const n = perStore.get(s) || 0; perStore.set(s, n + 1); return n < 2; })
-      .slice(0, 8);
-    if (!hits.length) return `今天 $${target} 左右找不到符合條件的餐點，試試別的金額。`;
-    return `今天 $${target} 左右：\n` + hits.map(h => {
-      const f = h.parts[0];
-      return `・${f.item}｜${f.store} $${h.price}${h.flags.length ? "（" + h.flags.join("、") + "）" : ""}`;
-    }).join("\n");
+    const prev = pending.get(uid);
+    if (prev && prev.cat && Date.now() - prev.at < PENDING_MS) { pending.delete(uid); return searchByPrice(p, target, prev.cat); }
+    pending.set(uid, { price: target, at: Date.now() });
+    return reply(`想找 $${target} 左右的哪一類？`, ["正餐", "早餐", "飲料", "咖啡", "點心", "全部"].map(k => [k, `${k} ${target}`]));
+  }
+  const cat = catOf(text);
+  if (cat) {
+    const prev = pending.get(uid);
+    if (prev && prev.price && Date.now() - prev.at < PENDING_MS) { pending.delete(uid); return searchByPrice(p, prev.price, cat); }
+    pending.set(uid, { cat, at: Date.now() });
+    const prices = cat === "飲料" || cat === "咖啡" ? [40, 60, 80, 100] : cat === "點心" ? [30, 50, 70, 90] : cat === "早餐" ? [40, 60, 80] : [60, 80, 100, 120, 150];
+    return reply(`想找多少錢左右的「${CATS[cat].label}」？點下面的金額，或直接打數字（例如 80）。`, prices.map(n => [`${n} 元`, `${cat} ${n}`]));
   }
 
-  return "看不懂這個指令 🙏\n\n" + HELP;
+  return reply("看不懂這個指令 🙏\n\n" + HELP);
 }
 
 async function handleEvent(event) {
@@ -145,9 +203,10 @@ async function handleEvent(event) {
   }
   if (event.type !== "message" || event.message.type !== "text") return null;
   const uid = (event.source && event.source.userId) || "anon";
-  const reply = handleText(uid, event.message.text);
-  const messages = chunk(reply).map(t => ({ type: "text", text: t }));
-  messages[messages.length - 1].quickReply = quickReply;
+  const r = handleText(uid, event.message.text);
+  const { text, buttons } = typeof r === "string" ? { text: r } : r;
+  const messages = chunk(text).map(t => ({ type: "text", text: t }));
+  messages[messages.length - 1].quickReply = buttons ? qr(buttons) : quickReply;
   return client.replyMessage({ replyToken: event.replyToken, messages });
 }
 
