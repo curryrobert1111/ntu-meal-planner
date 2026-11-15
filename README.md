@@ -3,6 +3,9 @@
 一週預算（預設 NT$2000）自動排出七天三餐，可加飲料、咖啡或點心；範圍包含台大校內、水源市場、公館、新生南路與和平東路 118 巷一帶。
 支援素食（全素／蛋奶素／鍋邊素）、穆斯林友善／清真、忌口（豬、牛、雞、海鮮、蛋、奶、花生）與「想多吃」偏好。
 
+- 網站：<https://curryrobert1111.github.io/ntu-meal-planner/>
+- LINE 官方帳號：<https://lin.ee/xlmjIhlx>（圖文選單連到網站；聊天機器人可查價位、排菜單，並用 Gemini AI 回答自由提問）
+
 ## 檔案結構
 
 ```
@@ -13,15 +16,22 @@ ntu-meal-planner/
 ├─ js/planner.js       排餐與篩選邏輯（網頁與 LINE Bot 共用）
 ├─ js/app.js           網頁互動
 ├─ linebot/            LINE Bot（Node.js）
-│  ├─ index.js
+│  ├─ index.js         收訊息、固定指令；看不懂的交給 gemini.js
+│  ├─ gemini.js        Gemini AI 自由對話（查詢工具、每日上限）
+│  ├─ memes.js         梗小辭典（台大／在地用語，要新增梗改這裡）
 │  ├─ package.json
-│  └─ .env.example
+│  ├─ .env.example     環境變數範本
+│  ├─ GEMINI.md        Gemini 設定教學
+│  └─ CLOUD_RUN.md     改部署到 Google Cloud Run 的教學
+├─ Dockerfile          Cloud Run 用（Render 不需要）
+├─ .dockerignore
+├─ .gitattributes      統一換行符號（LF）
 └─ .gitignore
 ```
 
 本機預覽：直接用瀏覽器打開 `index.html` 即可，不需要安裝任何東西。
 
-LINE Bot 部署到 Google Cloud Run 的完整步驟見 [`linebot/CLOUD_RUN.md`](linebot/CLOUD_RUN.md)。讓 bot 用 Gemini 自由對話見 [`linebot/GEMINI.md`](linebot/GEMINI.md)。
+LINE Bot 的說明見下方「LINE 官方帳號與聊天機器人」。
 
 
 ## 新增或修改餐點
@@ -43,6 +53,96 @@ LINE Bot 部署到 Google Cloud Run 的完整步驟見 [`linebot/CLOUD_RUN.md`](
 也可以在網頁的「餐點資料」分頁修改／新增，再按「匯出 JSON」把結果貼回 `data.js`。
 
 注意：網頁上的修改只存在使用者自己的瀏覽器（localStorage）。要讓所有人看到新資料，必須改 `js/data.js` 再 push 上 GitHub（流程見下一節）。
+
+---
+
+## LINE 官方帳號與聊天機器人
+
+### 架構
+
+```
+使用者（LINE） ──> LINE 平台 ──Webhook──> Render 上的 linebot/index.js
+                                              │
+                         固定指令（菜單、80、全素…）直接回覆
+                                              │ 看不懂的句子
+                                              v
+                                   linebot/gemini.js ──> Gemini API
+                                   （AI 先呼叫查詢工具讀 js/data.js，再組成回答）
+```
+
+- 網頁和 Bot 共用 `js/data.js` 與 `js/planner.js`：改資料並 push 後，網頁（GitHub Pages）和 Bot（Render 自動重新部署）都會更新。
+- 使用者的條件（預算、素食、忌口）與 AI 對話紀錄只存在伺服器記憶體，伺服器休眠或重新部署後會清空；不另外儲存使用者資料。
+
+### 固定指令（不經過 AI，不佔 Gemini 額度）
+
+整則訊息必須**完全相同**（前後空白會忽略）；多了其他字（例如「菜單謝謝」）就會交給 AI。
+
+| 類別 | 傳送內容 | Bot 回覆 |
+|---|---|---|
+| 說明 | `說明`、`help`、`?`、`？` | 指令列表（加好友時也會自動傳送） |
+| 查看設定 | `設定`、`條件` | 顯示目前條件 |
+| 預算 | `預算 1500`、`預留 300`、`加點 3` | 設定一週預算、預留金、加點次數（最多 14） |
+| 素食 | `全素`、`蛋奶素`、`鍋邊素`；`不限素食`、`取消素食` | 設定／取消素食條件 |
+| 穆斯林 | `穆斯林友善`、`穆斯林`；`清真`、`清真認證`、`halal`；`取消穆斯林` | 排除豬肉與酒／只選清真認證／取消 |
+| 忌口 | `不吃 牛肉 海鮮`（豬肉、牛肉、雞肉、海鮮、蛋、奶、花生）；`清除忌口` | 加入／清空忌口 |
+| 菜單 | `菜單`、`排菜單`、`一週菜單`、`排餐` | 一週菜單＋「完整表格」連結（網頁會顯示同一份菜單） |
+| 依金額找 | 只傳金額：`80`、`80元`、`80塊`、`$80`（10～999，全形數字也可以） | 先問要哪一類（附按鈕） |
+| 依金額找 | 只傳類別：`正餐`、`早餐`、`午餐`、`晚餐`、`飲料`、`咖啡`、`點心`、`全部` | 先問要多少錢（附按鈕） |
+| 依金額找 | 類別別名：`主餐`、`吃飯`、`飯`（＝正餐）；`喝的`、`手搖`、`手搖飲`、`茶`（＝飲料）；`甜點`、`小吃`（＝點心）；`不限`、`都可以`（＝全部） | 同對應的類別 |
+| 依金額找 | 類別＋金額：`正餐 80`、`80 飲料`、`飲料80元`；或先傳金額、不久後再傳類別 | 直接列出今天有營業的餐點（每家最多 2 筆） |
+| 非文字 | 貼圖、圖片、位置、語音 | 不回覆 |
+
+指令都寫在 `linebot/index.js` 的 `handleText()`，每個 `if` 是一條規則；「說明」的文字是同檔案的 `HELP`。
+
+### AI 自由對話（Gemini）
+
+不屬於上表的文字（例如「公館有什麼便宜的拉麵」「今天下雨想在校內吃」「你好」）會交給 Google Gemini（預設 `gemini-3.5-flash-lite`）。
+
+- **資料不會亂編**：AI 要先呼叫查詢工具（找餐點、查店家、排菜單、改條件）讀 `js/data.js`，店名、價格、營業時間只能用查到的資料；一週菜單由程式產生後直接附上，不經 AI 改寫。
+- **閒聊與網路梗**：可以用模型本身的知識接梗、閒聊，再帶回找吃的；不捏造名人言論、不嘲笑任何人。寫作業、寫程式等無關任務會婉拒。
+- **梗小辭典**：模型不懂的台大／在地用語寫在 `linebot/memes.js`（目前有統神「早餐吃到飽」、活大、小福），照格式新增即可。每筆 1～2 句，太長會讓每則對話變慢、變貴。
+- 設定步驟與常見錯誤見 [`linebot/GEMINI.md`](linebot/GEMINI.md)。
+
+### 用量與費用
+
+| 方案 | 額度 | 約可回覆 | 費用 |
+|---|---|---|---|
+| 免費（目前） | 3.5 Flash-Lite 每分鐘 15 次、每天 500 次請求 | 每天約 250～400 則 AI 對話 | 0 元；Google 可能用對話內容改進產品 |
+| 付費（Tier 1） | 上限高很多（以 AI Studio 顯示為準） | 依預算 | 需預付至少 5 美元；估計每 1,000 則 AI 對話約 NT$70，換 3.5 Flash 約 NT$300 |
+
+- 一則 AI 對話約用 1～3 次請求：純聊天 1 次，需要查資料 2 次，排菜單或多次查詢 3 次。固定指令不計入。
+- 免費額度依美國太平洋時間每天重置（台灣下午 3～4 點）；用完時 AI 會回「太忙了」，固定指令照常可用。
+- 改用 `gemini-3.5-flash` 比較聰明、懂更多梗，但免費方案每天只有約 20 次請求，只適合展示。
+- 實際額度與用量看 <https://aistudio.google.com/rate-limit>；付費時到 <https://aistudio.google.com/spend> 設定花費上限。
+
+### 環境變數（Render → Environment）
+
+| 名稱 | 說明 |
+|---|---|
+| `LINE_CHANNEL_SECRET` | LINE Developers → Basic settings → Channel secret（必填） |
+| `LINE_CHANNEL_ACCESS_TOKEN` | LINE Developers → Messaging API → Channel access token（必填） |
+| `WEB_URL` | 網站網址，用來產生「完整表格」連結 |
+| `GEMINI_API_KEY` | Google AI Studio 的 API 金鑰；不填就只有固定指令 |
+| `GEMINI_MODEL` | 預設 `gemini-3.5-flash-lite`；模型下架時改這裡即可 |
+| `AI_DAILY_LIMIT` | 每人每天最多幾則 AI 回覆，預設 30 |
+| `AI_GLOBAL_LIMIT` | 全站每天最多幾則 AI 回覆，預設 1500；免費方案建議設 **450**（3.5 Flash 免費方案設 18） |
+| `AI_WEB_SEARCH` | 設成 `1` 讓 AI 遇到看不懂的梗可以上 Google 查；每月前 5,000 次搜尋免費，之後每 1,000 次約 14 美元 |
+
+金鑰等同密碼：只填在 Render，不要寫進程式或推上 GitHub。本機測試時寫在 `linebot/.env`（已被 `.gitignore` 排除）。
+
+### 部署（Render，免費方案）
+
+| 欄位 | 設定 |
+|---|---|
+| Language | Node |
+| Branch | `main` |
+| Region | Singapore |
+| Build Command | `cd linebot && npm install` |
+| Start Command | `node linebot/index.js` |
+
+- LINE Developers → Messaging API → Webhook URL 填 `https://你的服務.onrender.com/webhook`（結尾要有 `/webhook`），打開 Use webhook，Webhook redelivery 保持關閉；Official Account Manager 的「自動回應訊息」要關閉。
+- 免費方案閒置 15 分鐘會休眠，喚醒約需 1 分鐘，期間第一則訊息可能沒有回應。可用 <https://cron-job.org> 每 10 分鐘呼叫一次服務網址保持喚醒，或改部署到 Google Cloud Run（見 [`linebot/CLOUD_RUN.md`](linebot/CLOUD_RUN.md)）。
+- 看記錄（Logs）出現 `LINE bot listening on …（AI 對話：開啟）` 代表啟動成功且有讀到 Gemini 金鑰。
 
 ---
 

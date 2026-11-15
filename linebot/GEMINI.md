@@ -41,6 +41,8 @@ Gemini 只負責「聽懂」和「說話」。店名、價格、營業時間都�
 | `GEMINI_MODEL` | 不填就用 `gemini-3.5-flash-lite`。Google 下架舊模型時，錯誤訊息會告訴你新名稱，改這個變數就好，不用改程式 | 否 |
 | `AI_DAILY_LIMIT` | 每位使用者每天最多幾則 AI 回覆，預設 `30` | 否 |
 | `AI_GLOBAL_LIMIT` | 整個 bot 每天最多幾則 AI 回覆，預設 `1500` | 否 |
+| `AI_WEB_SEARCH` | 設成 `1`：看不懂的梗可以上 Google 查。搜尋次數另外計費（每月前 5,000 次免費），只用來查梗，不會拿來查店家 | 否 |
+| （梗小辭典） | 台大／在地用語寫在 `linebot/memes.js`，照格式新增即可 | — |
 
 - **Render**：服務頁面左側「Environment」→「Add Environment Variable」→ 儲存，會自動重新部署。
 - **Cloud Run**：服務頁面 →「編輯並部署新的修訂版本」→「變數與密鑰」→ 新增 → 部署。
